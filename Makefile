@@ -4,6 +4,7 @@ OBJDIR=obj
 BINDIR=bin
 CXXFLAGS= -c -Wall -I$(SRCDIR) 
 LDFLAGS=
+LIBS=-lpthread
 SOURCE_FILES=main.cpp
 SOURCES=$(patsubst %.cpp,$(SRCDIR)/%.cpp,$(SOURCE_FILES))
 OBJECT_FILES=$(patsubst %.cpp,%.o,$(SOURCE_FILES))
@@ -13,8 +14,8 @@ EXECUTABLE=$(BINDIR)/test
 
 all: $(SOURCES) $(EXECUTABLE)
     
-$(EXECUTABLE): $(OBJDIR) $(OBJECTS) $(BINDIR)
-	$(CXX) $(LDFLAGS) $(OBJECTS) -o $@
+$(EXECUTABLE): $(OBJDIR) $(OBJECTS) $(BINDIR) $(SOURCES)
+	$(CXX) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $< -o $@
