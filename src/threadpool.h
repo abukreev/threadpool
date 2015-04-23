@@ -44,41 +44,29 @@ void* threadfun(void *p) {
 
     ThreadPool* pool = (ThreadPool*) p;
 
-//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-    pthread_mutex_lock(&mutex);
-//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-
     while (pool->d_working) {
-//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-        pthread_cond_wait(&cond, &mutex);
-//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+
+        pthread_mutex_lock(&mutex);
+
+        while (pool->d_queue.empty()) {
+            pthread_cond_wait(&cond, &mutex);
+            if (!pool->d_working) {
+                break;
+            }
+        }
 
         if (!pool->d_working) {
             pthread_mutex_unlock(&mutex);
             break;
         }
 
-        while (true) {
-            if (pool->d_queue.empty()) {
-                pthread_mutex_unlock(&mutex);
-                break;
-            }
-//            std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-            ThreadPool::Job job = *pool->d_queue.begin();
-            pool->d_queue.pop_front();
-            pthread_cond_broadcast(&cond);
-//            std::cerr << __FILE__ << ":" << __LINE__ << ": d_queue.size() = " << pool->d_queue.size() << std::endl;
-            pthread_mutex_unlock(&mutex);
+        ThreadPool::Job job = *pool->d_queue.begin();
+        pool->d_queue.pop_front();
+        pthread_cond_broadcast(&cond);
+        pthread_mutex_unlock(&mutex);
 
-            assert(NULL != job);
-            job(); // job
-
-            if (!pool->d_working) {
-                break;
-            }
-
-            pthread_mutex_lock(&mutex);
-        }
+        assert(NULL != job);
+        job(); // job
     }
 
     counter--;

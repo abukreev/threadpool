@@ -15,7 +15,7 @@ int main () {
 
     ThreadPool pool(2);
 
-    sleep(1);
+//    sleep(1);
 
     for (int i = 0; i < 10; i++) {
         pool.enqueueJob(fun);
