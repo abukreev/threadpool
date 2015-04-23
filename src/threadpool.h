@@ -6,8 +6,14 @@
 #include <list>
 #include <iostream>
 #include <unistd.h>
+#include <assert.h>
+
+#include <stdio.h>
 
 void* threadfun(void *p);
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 class ThreadPool {
 public:
@@ -18,8 +24,6 @@ private:
     Threads d_threads;
     typedef std::list<Job> Queue;
     Queue d_queue;
-    pthread_mutex_t d_mutex;
-    pthread_cond_t d_cv;
     volatile bool d_working;
 
 public:
@@ -34,44 +38,57 @@ public:
 
 void* threadfun(void *p) {
 
-    std::cerr << "threadfun started" << std::endl;
+    static volatile int counter = 0;
+    counter++;
+    std::cerr << __FILE__ << ":" << __LINE__ << ": counter = " << counter << std::endl;
 
     ThreadPool* pool = (ThreadPool*) p;
 
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_mutex_lock(&mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+
     while (pool->d_working) {
+        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+        pthread_cond_wait(&cond, &mutex);
+        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 
-        pthread_mutex_lock(&pool->d_mutex);
-        bool empty = pool->d_queue.empty();
-        pthread_mutex_unlock(&pool->d_mutex);
+        if (!pool->d_working) {
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
 
-        if (empty) {
-            std::cerr << "threadfun sleeping" << std::endl;
-//            pthread_cond_wait(&pool->d_cv, &pool->d_mutex);
-            sleep(1);
-            std::cerr << "threadfun woke up" << std::endl;
-        } else {    
-            pthread_mutex_lock(&pool->d_mutex);
+        while (true) {
+            if (pool->d_queue.empty()) {
+                pthread_mutex_unlock(&mutex);
+                break;
+            }
+//            std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+            ThreadPool::Job job = *pool->d_queue.begin();
             pool->d_queue.pop_front();
-            std::cerr << "threadfun took one job from the queue" << std::endl;
-            pthread_mutex_unlock(&pool->d_mutex);
+//            std::cerr << __FILE__ << ":" << __LINE__ << ": d_queue.size() = " << pool->d_queue.size() << std::endl;
+            pthread_mutex_unlock(&mutex);
 
-            std::cerr << "threadfun doing the job" << std::endl;
-            sleep(5); // job
-            std::cerr << "threadfun finished the job" << std::endl;
+            assert(NULL != job);
+            job(); // job
+
+            if (!pool->d_working) {
+                break;
+            }
+
+            pthread_mutex_lock(&mutex);
         }
     }
 
-    std::cerr << "threadfun finished" << std::endl;
+    counter--;
+    std::cerr << __FILE__ << ":" << __LINE__ << ": counter = " << counter << std::endl;
 
     return NULL;
 }
 
-ThreadPool::ThreadPool(size_t numThreads) {
-
-    d_working = true;
-
-    pthread_mutex_lock(&d_mutex);
-
+ThreadPool::ThreadPool(size_t numThreads)
+: d_working(true)
+ {
     d_threads.reserve(numThreads);
     for (size_t i = 0; i < numThreads; ++i) {
         pthread_t thread;
@@ -80,8 +97,6 @@ ThreadPool::ThreadPool(size_t numThreads) {
         }
         d_threads.push_back(thread);
     }
-
-    pthread_mutex_unlock(&d_mutex);
 }
 
 ThreadPool::~ThreadPool() {
@@ -91,21 +106,28 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::enqueueJob(ThreadPool::Job job) {
 
-    pthread_mutex_lock(&d_mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_mutex_lock(&mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     d_queue.push_back(job);
-    pthread_mutex_unlock(&d_mutex);
-    std::cerr << "job was added to the queue" << std::endl;
+    std::cerr << __FILE__ << ":" << __LINE__ << ": d_queue.size() = " << d_queue.size() << std::endl;
+    pthread_cond_signal(&cond);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_mutex_unlock(&mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 
-//    pthread_cond_signal(&d_cv);
-//    std::cerr << "conditional variable signaled" << std::endl;
 }
 
 void ThreadPool::wait() {
 
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     while (true) {
-        pthread_mutex_lock(&d_mutex);
+//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+        pthread_mutex_lock(&mutex);
+//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
         bool empty = d_queue.empty();
-        pthread_mutex_unlock(&d_mutex);
+//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+        pthread_mutex_unlock(&mutex);
         if (empty) {
             break;
         }
@@ -115,16 +137,26 @@ void ThreadPool::wait() {
 
 void ThreadPool::drain() {
 
+    pthread_mutex_lock(&mutex);
     d_working = false;
-    pthread_mutex_lock(&d_mutex);
-//    pthread_cond_signal(&d_cv);
-    d_queue.push_back(NULL);
-    pthread_mutex_unlock(&d_mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_cond_broadcast(&cond);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_mutex_unlock(&mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    int counter = 0;
     for (Threads::iterator i = d_threads.begin(), end = d_threads.end();
          i != end; ++i) {
-        if (pthread_join(*i, NULL)) {
-            std::cerr << "Error joining thread" << std::endl;
-        }
+        pthread_t& thread = *i;
+        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+        /*int res = */pthread_join(thread, NULL);
+        counter++;
+        std::cerr << __FILE__ << ":" << __LINE__ << ": thread " << counter << " stopped" << std::endl;
+//        if (0 != res) {
+//            char buf[1024];
+//            perror(buf);
+//            std::cerr << "Error joining thread (" << buf << ")" << std::endl;
+//        }
     }
 }
 
