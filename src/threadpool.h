@@ -44,14 +44,14 @@ void* threadfun(void *p) {
 
     ThreadPool* pool = (ThreadPool*) p;
 
-    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     pthread_mutex_lock(&mutex);
-    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 
     while (pool->d_working) {
-        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
         pthread_cond_wait(&cond, &mutex);
-        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 
         if (!pool->d_working) {
             pthread_mutex_unlock(&mutex);
@@ -66,6 +66,7 @@ void* threadfun(void *p) {
 //            std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
             ThreadPool::Job job = *pool->d_queue.begin();
             pool->d_queue.pop_front();
+            pthread_cond_broadcast(&cond);
 //            std::cerr << __FILE__ << ":" << __LINE__ << ": d_queue.size() = " << pool->d_queue.size() << std::endl;
             pthread_mutex_unlock(&mutex);
 
@@ -106,33 +107,40 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::enqueueJob(ThreadPool::Job job) {
 
-    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     pthread_mutex_lock(&mutex);
-    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     d_queue.push_back(job);
-    std::cerr << __FILE__ << ":" << __LINE__ << ": d_queue.size() = " << d_queue.size() << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << ": d_queue.size() = " << d_queue.size() << std::endl;
     pthread_cond_signal(&cond);
-    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     pthread_mutex_unlock(&mutex);
-    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 
 }
 
 void ThreadPool::wait() {
 
-//    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_mutex_lock(&mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     while (true) {
-//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-        pthread_mutex_lock(&mutex);
-//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-        bool empty = d_queue.empty();
-//        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-        pthread_mutex_unlock(&mutex);
-        if (empty) {
+        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+        if (!d_working) {
+            std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
             break;
         }
-        sleep(1);
+        if (d_queue.empty()) {
+            std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+            break;
+        }
+        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+        pthread_cond_wait(&cond, &mutex);
+        std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
     }
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+    pthread_mutex_unlock(&mutex);
+    std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 }
 
 void ThreadPool::drain() {
@@ -149,14 +157,9 @@ void ThreadPool::drain() {
          i != end; ++i) {
         pthread_t& thread = *i;
         std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-        /*int res = */pthread_join(thread, NULL);
+        pthread_join(thread, NULL);
         counter++;
         std::cerr << __FILE__ << ":" << __LINE__ << ": thread " << counter << " stopped" << std::endl;
-//        if (0 != res) {
-//            char buf[1024];
-//            perror(buf);
-//            std::cerr << "Error joining thread (" << buf << ")" << std::endl;
-//        }
     }
 }
 

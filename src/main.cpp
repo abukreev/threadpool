@@ -4,7 +4,7 @@
 void fun() {
 
     static int counter = 0;
-    int value = counter++;
+    int value = ++counter;
 
     std::cerr << "Task #" << value << " started" << std::endl;
     sleep(1);
@@ -15,9 +15,16 @@ int main () {
 
     ThreadPool pool(2);
 
-    sleep(8);
+    sleep(1);
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
+        pool.enqueueJob(fun);
+    }
+
+    pool.wait();
+    sleep(1);
+
+    for (int i = 0; i < 10; i++) {
         pool.enqueueJob(fun);
     }
 
